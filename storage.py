@@ -18,6 +18,11 @@ from supabase import create_client, Client
 
 BUCKET = "spotlight-media"
 SIGNED_URL_EXPIRY = 3600  # 1 hour
+
+# In-process signed URL cache — avoids calling Supabase Storage API on every request.
+# Keys are storage_path, values are (url, expires_at_unix).
+_url_cache: dict[str, tuple[str, float]] = {}
+_URL_CACHE_BUFFER = 300  # refresh 5 min before actual expiry
 VIDEO_MAX_BYTES = 200 * 1024 * 1024  # 200 MB
 PHOTO_MAX_BYTES = 5 * 1024 * 1024    # 5 MB
 
@@ -101,10 +106,19 @@ def mint_upload_token(ttl_seconds: int = 300) -> str:
 
 
 def create_signed_read_url(storage_path: str, expiry: int = SIGNED_URL_EXPIRY) -> str:
-    """Returns a time-limited read URL for a stored object."""
+    """Returns a time-limited read URL for a stored object, cached for (expiry - buffer) seconds."""
+    now = time.time()
+    cached = _url_cache.get(storage_path)
+    if cached:
+        url, expires_at = cached
+        if now < expires_at:
+            return url
     client = _admin_client()
     result = client.storage.from_(BUCKET).create_signed_url(storage_path, expiry)
-    return result.get("signedURL") or result.get("signed_url") or ""
+    url = result.get("signedURL") or result.get("signed_url") or ""
+    if url:
+        _url_cache[storage_path] = (url, now + expiry - _URL_CACHE_BUFFER)
+    return url
 
 
 def delete_object(storage_path: str) -> bool:

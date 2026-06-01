@@ -232,7 +232,7 @@ def notify_deck_submitted(db: Session, deck: models.PitchDeck, approver_user_id:
     ok = _send_email(approver_email, subject, body)
     _record_notification(
         db, recipient_type="approver", channel="email",
-        template_key="deck_submitted", payload={"deck_id": deck.id},
+        template_key="deck_submitted", payload={"deck_id": str(deck.id)},
         recipient_id=approver_user_id, recipient_email=approver_email, success=ok,
     )
     create_in_app(
@@ -260,7 +260,7 @@ def notify_deck_action(db: Session, deck: models.PitchDeck, action: str, manager
     ok = _send_email(manager_email, subject, body)
     _record_notification(
         db, recipient_type="manager", channel="email",
-        template_key=f"deck_{action}", payload={"deck_id": deck.id},
+        template_key=f"deck_{action}", payload={"deck_id": str(deck.id)},
         recipient_id=manager_user_id, recipient_email=manager_email, success=ok,
     )
     create_in_app(

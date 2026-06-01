@@ -3,7 +3,7 @@ import uuid
 
 from sqlalchemy import (
     Column, Integer, String, DateTime, Text, ForeignKey,
-    JSON, Boolean, BigInteger, Table
+    JSON, Boolean, BigInteger, Table, Index
 )
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
@@ -52,7 +52,7 @@ class CastingCall(Base):
 
     applications = relationship("Application", back_populates="casting_call")
     pitch_decks = relationship("PitchDeck", back_populates="casting_call")
-    collaborators = relationship("UserProfile", secondary="casting_call_collaborators", lazy="selectin")
+    collaborators = relationship("UserProfile", secondary="casting_call_collaborators", lazy="select")
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -115,6 +115,12 @@ class Application(Base):
     applicant = relationship("Applicant", back_populates="applications")
     media = relationship("ApplicationMedia", back_populates="application", cascade="all, delete-orphan")
     tags = relationship("ApplicationTag", back_populates="application", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("ix_applications_casting_call_status", "casting_call_id", "status"),
+        Index("ix_applications_casting_call_complete", "casting_call_id", "is_complete"),
+        Index("ix_applications_status_complete", "status", "is_complete"),
+    )
 
 
 class ApplicationMedia(Base):
@@ -212,6 +218,7 @@ class PitchDeck(Base):
 
     casting_call = relationship("CastingCall", back_populates="pitch_decks")
     finalists = relationship("PitchDeckFinalist", back_populates="deck", cascade="all, delete-orphan", order_by="PitchDeckFinalist.position")
+    reviewer_notes_list = relationship("PitchDeckNote", back_populates="deck", cascade="all, delete-orphan", order_by="PitchDeckNote.created_at")
 
 
 class PitchDeckFinalist(Base):
@@ -227,6 +234,19 @@ class PitchDeckFinalist(Base):
 
     deck = relationship("PitchDeck", back_populates="finalists")
     application = relationship("Application")
+
+
+class PitchDeckNote(Base):
+    __tablename__ = "pitch_deck_notes"
+
+    id = Column(PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    deck_id = Column(PGUUID(as_uuid=True), ForeignKey("pitch_decks.id", ondelete="CASCADE"), nullable=False, index=True)
+    reviewer_id = Column(String, nullable=False)
+    note = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    deck = relationship("PitchDeck", back_populates="reviewer_notes_list")
 
 
 class AuditLog(Base):
@@ -269,6 +289,10 @@ class InAppNotification(Base):
     link = Column(String)
     read = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index("ix_in_app_notifications_user_read", "user_id", "read"),
+    )
 
 
 class PhoneOTP(Base):

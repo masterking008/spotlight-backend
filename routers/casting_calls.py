@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -7,6 +8,14 @@ from sqlalchemy.orm import Session
 from database import get_db
 from rbac import require_role, require_any_role, assert_can_manage
 import models, schemas, crud
+
+
+def _deadline_passed(deadline) -> bool:
+    if not deadline:
+        return False
+    now = datetime.now(timezone.utc)
+    dl = deadline if deadline.tzinfo else deadline.replace(tzinfo=timezone.utc)
+    return now > dl
 
 router = APIRouter()
 
@@ -48,7 +57,7 @@ async def get_casting_call(
 async def get_public_casting_call(casting_call_id: uuid.UUID, db: Session = Depends(get_db)):
     """Public endpoint — no auth required. Used by talent application form."""
     cc = crud.get_casting_call(db, casting_call_id)
-    if not cc or cc.status != "open":
+    if not cc or cc.status != "open" or _deadline_passed(cc.deadline):
         raise HTTPException(404, "Casting call not found or not currently accepting applications")
     return {
         "id": cc.id,
@@ -71,7 +80,7 @@ async def get_casting_call_by_slug(show_slug: str, role_slug: str, db: Session =
         models.CastingCall.status == "open"
     ).first()
 
-    if not cc:
+    if not cc or _deadline_passed(cc.deadline):
         raise HTTPException(404, "Casting call not found or not currently accepting applications")
 
     return {

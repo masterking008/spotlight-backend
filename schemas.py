@@ -95,6 +95,7 @@ class CastingCall(CastingCallBase):
     status: CastingCallStatus
     owner_id: str
     collaborators: List[CollaboratorOut] = []
+    application_count: int = 0
     created_at: datetime
     updated_at: datetime
 
@@ -312,21 +313,23 @@ class OTPVerifyResponse(BaseModel):
 
 # ─── Pitch Decks ──────────────────────────────────────────────────────────────
 
+class FinalistCreate(BaseModel):
+    application_id: UUIDStr
+    position: int
+    manager_notes: Optional[str] = None
+
+
 class PitchDeckCreate(BaseModel):
     casting_call_id: UUIDStr
     title: str
     notes: Optional[str] = None
+    finalists: List[FinalistCreate] = []
 
 
 class PitchDeckUpdate(BaseModel):
     title: Optional[str] = None
     notes: Optional[str] = None
-
-
-class FinalistCreate(BaseModel):
-    application_id: UUIDStr
-    position: int
-    manager_notes: Optional[str] = None
+    finalists: Optional[List[FinalistCreate]] = None
 
 
 class FinalistUpdate(BaseModel):
@@ -366,8 +369,37 @@ class PitchDeckOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     finalists: List[PitchDeckFinalistOut] = []
+    casting_call_title: Optional[str] = None
+    casting_call_show: Optional[str] = None
+    casting_call_role: Optional[str] = None
+    reviewer_notes_list: List["ReviewerNoteOut"] = []
+
+    @classmethod
+    def model_validate(cls, obj, *args, **kwargs):
+        instance = super().model_validate(obj, *args, **kwargs)
+        if hasattr(obj, "casting_call") and obj.casting_call:
+            instance.casting_call_title = obj.casting_call.title
+            instance.casting_call_show = obj.casting_call.show
+            instance.casting_call_role = obj.casting_call.role
+        return instance
 
     model_config = {"from_attributes": True}
+
+
+class ReviewerNoteOut(BaseModel):
+    id: UUIDStr
+    deck_id: UUIDStr
+    reviewer_id: str
+    reviewer_name: Optional[str] = None
+    note: str
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ReviewerNoteCreate(BaseModel):
+    note: str
 
 
 class DeckActionRequest(BaseModel):
@@ -382,6 +414,7 @@ class AuditLogEntry(BaseModel):
     entity_id: UUIDStr
     action: str
     performed_by: str
+    performed_by_name: Optional[str] = None
     previous_value: Optional[Dict[str, Any]] = None
     new_value: Optional[Dict[str, Any]] = None
     created_at: datetime

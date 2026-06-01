@@ -1,5 +1,6 @@
 import os
 import uuid
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
@@ -23,6 +24,12 @@ async def submit_application(
     cc = crud.get_casting_call(db, body.casting_call_id)
     if not cc or cc.status != "open":
         raise HTTPException(400, "This casting call is not currently accepting applications")
+
+    if cc.deadline:
+        now = datetime.now(timezone.utc)
+        dl = cc.deadline if cc.deadline.tzinfo else cc.deadline.replace(tzinfo=timezone.utc)
+        if now > dl:
+            raise HTTPException(400, "This casting call is no longer accepting applications — the deadline has passed")
 
     if os.getenv("OTP_SECRET") and body.phone_token:
         try:

@@ -13,6 +13,14 @@ router = APIRouter()
 
 # ─── Pitch Decks ──────────────────────────────────────────────────────────────
 
+@router.get("/pitch-decks", response_model=List[schemas.PitchDeckOut])
+async def list_all_pitch_decks(
+    current_user: dict = Depends(require_any_role()),
+    db: Session = Depends(get_db),
+):
+    return crud.get_all_pitch_decks(db, user_id=current_user["id"], role=current_user.get("role", ""))
+
+
 @router.post("/pitch-decks", response_model=schemas.PitchDeckOut)
 async def create_pitch_deck(
     body: schemas.PitchDeckCreate,
@@ -207,6 +215,30 @@ async def set_finalist_verdict(
 
 
 # ─── Audit Log ────────────────────────────────────────────────────────────────
+
+@router.post("/pitch-decks/{deck_id}/notes", response_model=schemas.ReviewerNoteOut)
+async def add_reviewer_note(
+    deck_id: uuid.UUID,
+    body: schemas.ReviewerNoteCreate,
+    current_user: dict = Depends(require_role("admin", "approver")),
+    db: Session = Depends(get_db),
+):
+    deck = crud.get_pitch_deck(db, deck_id)
+    if not deck:
+        raise HTTPException(404, "Pitch deck not found")
+    if deck.status not in ("submitted", "changes_requested", "approved", "rejected"):
+        raise HTTPException(400, "Notes can only be added to submitted or reviewed decks")
+    return crud.add_reviewer_note(db, deck_id, current_user["id"], body.note)
+
+
+@router.get("/pitch-decks/{deck_id}/notes", response_model=List[schemas.ReviewerNoteOut])
+async def get_reviewer_notes(
+    deck_id: uuid.UUID,
+    current_user: dict = Depends(require_any_role()),
+    db: Session = Depends(get_db),
+):
+    return crud.get_reviewer_notes(db, deck_id)
+
 
 @router.get("/pitch-decks/{deck_id}/audit-log", response_model=List[schemas.AuditLogEntry])
 async def get_deck_audit(
